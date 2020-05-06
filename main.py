@@ -9,13 +9,13 @@ TOKEN = '792704732:AAHBTUYMzth_hk4gaptyTUUJaA5sxghTrYY'
 chat_id = None
 bot = telebot.TeleBot(TOKEN)
 
-login = 'zarazhotabaeva'
-password = 'test123'
-user_token = 'dv4LSjMGdagqlAowpm2l606U6ARwfoQw'
-class_id = '1565042653527550944'
-user_id = '1000004914080'
-person_id = '1000006849522'
-school_id = '1000004956244'
+login = ''
+password = ''
+user_token = ''
+class_id = ''
+user_id = ''
+person_id = ''
+school_id = ''
 
 
 random_answers = ['Бла-бла-бла, не понимаю',
