@@ -4,18 +4,14 @@ from kunapipy.kundelik import kundelik
 import random
 import requests
 import json
+from firebase import firebase
+
 
 TOKEN = '792704732:AAHBTUYMzth_hk4gaptyTUUJaA5sxghTrYY'
 chat_id = None
 bot = telebot.TeleBot(TOKEN)
 
-login = ''
-password = ''
-user_token = ''
-class_id = ''
-user_id = ''
-person_id = ''
-school_id = ''
+firebase = firebase.FirebaseApplication('https://kundelik-7f9c2.firebaseio.com/', None)
 
 
 random_answers = ['Бла-бла-бла, не понимаю',
@@ -27,28 +23,19 @@ random_answers = ['Бла-бла-бла, не понимаю',
 
 @bot.message_handler(commands=['i_need_help'], content_types=['text'])
 def i_need_help(message):
-    bot.send_message(message.chat.id, str(message.from_user.first_name) + ', спасибо за то, что не боишься обратиться за помощью. '
-                                                                          'У всех нас бывают проблемы, даже у ботов, как я, и это нормально - чувстовать себя'
-                                                                          ' подавленно. Для меня важно знать, что ты, мой друг, в порядке. Мы находимся на территории'
-                                                                          ' РК, а значит, у нас есть действующая горячая линия, телефон доверия, куда ты можешь '
-                                                                          ' обратиться за помощью, если ты оказался в сложной жизненной ситуации или'
-                                                                          ' особенно, если к тебе применяется насилие.'
-                                                                          'Помни, насилие - это во всех формах насилие, будь то твой родной человек или чужой одноклассник, '
-                                                                          'никто не имеет права причинять тебе боль. Номер горячей линии - "150" или "8-708-106-08-10". '
-                                                                          'Если ты чувствуешь себя нехорошо из-за конфликта с родителем или проблем в школе, ты также '
-                                                                          'можешь обратииться по этой горячей линии. Также каждая школа обязана иметь в штате сотрудников '
-                                                                          'школьного психолога, к которому ты также можешь обратиться за помощью. Обращаться за помощью'
-                                                                          ' к психологу - абсолютно нормально, что бы там ни говорили, это нужно и важно делать для твоего '
-                                                                          'самочувствия, ровно также, как делать прививки от гриппа осенью. Помни, что ты не виноват в том,'
-                                                                          ' что происходит в твоей жизни, что у тебя все получится. Твой верный друг, бот :)')
+    bot.send_message(message.chat.id, str(message.from_user.first_name) + firebase.get('/i_need_help', ''))
 
 
 @bot.message_handler(commands=['start'], content_types=['text'])
 def welcome(message):
-    global chat_id
     sticker = open('C:\Kundelik\hello_sticker.webp', 'rb')
+
+    firebase.put('/' + str(message.from_user.id), 'first_name', message.from_user.first_name)
+    firebase.put('/' + str(message.from_user.id), 'login', '')
+    firebase.put('/' + str(message.from_user.id), 'password', '')
+    firebase.put('/' + str(message.from_user.id), 'user_token', '')
+
     bot.send_sticker(message.chat.id, sticker)
-    chat_id = message.chat.id
     bot.send_message(message.chat.id, "Привет, я Oqu_bot! Я умею удаленно работать с системой Kundelik "
                                       "и помогу упростить твоё взаимодействие с ней через понятную и "
                                       "привычную всем социальную сеть Telegramm. Хочу уточнить, что "
@@ -58,15 +45,26 @@ def welcome(message):
                                       " ты можешь проверить название своих предметов с помощью функции /my_subjects."
                                       " Также, чтобы использовать функцию /login, в том же сообщении ты должен ввести"
                                       " свои данные в формате “login:mylogin password:mypassword” через пробел после"
-                                      " самой команды (в одном сообщении!). Пример - «/login login:ivanivanov password:test123»."
+                                      " самой команды (в одном сообщении!). Пример - "
+                                      "«/login login:ivanivanov password:test123»."
                                       " Что ж, теперь мы точно знакомы, приятно познакомится! :wave:")
 
 
 @bot.message_handler(commands=['summative_marks'], content_types=['text'])
 def summative_marks(message):
-    global login, password, user_token, random_answers, \
-        person_id, user_id, class_id, school_id
+    try:
+        data = get_data_from_db(tele_id=message.from_user.id, data_type=['class_id', 'person_id', 'user_token'])
+    except Exception as e:
+        bot.send_message(message.chat.id,'Упс! Возможно ты не вошел в систему и мы с тобой еще не знакомы. '
+                                         'Воспользуйся функцией /login и попробуй снова!')
+
+    class_id = data['class_id']
+    person_id = data['person_id']
+    user_token = data['user_token']
+
+    bot.send_message(message.chat.id, message.from_user.id)
     bot.send_message(message.chat.id, "Что ж, посмотрим на твои оценки..." + '\n')
+
     if len(message.text.split()) == 1:
         url = 'https://api.kundelik.kz/v2.0/edu-group/' + class_id + '/person/' + person_id + '/criteria-marks'
         res = requests.get(url, headers={'Access-Token': user_token}).json()
@@ -104,14 +102,23 @@ def summative_marks(message):
 
 @bot.message_handler(commands=['schedule'], content_types=['text'])
 def schedule(message):
-    global login, password, user_token, random_answers, \
-        person_id, user_id, class_id, school_id
+    try:
+        data = get_data_from_db(tele_id=message.from_user.id, data_type=['person_id', 'class_id', 'user_token'])
+    except Exception as e:
+        bot.send_message(message.chat.id, 'Упс! Возможно ты не вошел в систему и мы с тобой еще не знакомы. '
+                                          'Воспользуйся функцией /login и попробуй снова!')
+
+    person_id = data['person_id']
+    class_id = data['class_id']
+    user_token = data['user_token']
+
     bot.send_message(message.chat.id, "Что у нас завтра?" + '\n')
     start_date = str(datetime.date.today() + datetime.timedelta(days=1))
     end_date = str(datetime.date.today() + datetime.timedelta(days=2))
     url = 'https://api.kundelik.kz/v2.0/persons/' + person_id + '/groups/' + class_id + '/' \
           'schedules?startDate=' + start_date + '&endDate=' + end_date
     schedule = requests.get(url, headers={'Access-Token': user_token}).json()['days'][0]['lessons']
+
     for lesson in schedule:
         bot.send_message(message.chat.id,str(lesson['number']) + ')' + str(lesson['hours']) + ' - ' +
                          get_lesson_information(user_token=user_token, lesson_id=lesson['id'])['subject']['name'])
@@ -119,12 +126,19 @@ def schedule(message):
 
 @bot.message_handler(commands=['my_subjects'], content_types=['text'])
 def my_subjects(message):
-    global login, password, user_token, random_answers, \
-        person_id, user_id, class_id, school_id
+    try:
+        data = get_data_from_db(tele_id=message.from_user.id, data_type=['class_id', 'user_token'])
+    except Exception as e:
+        bot.send_message(message.chat.id, 'Упс! Возможно ты не вошел в систему и мы с тобой еще не знакомы. '
+                                          'Воспользуйся функцией /login и попробуй снова!')
+    class_id = data['class_id']
+    user_token = data['user_token']
+
     bot.send_message(message.chat.id, "Список всех предметов твоей школы" + '\n')
     subjects = get_subject_name(class_id=class_id, user_token=user_token)
     bot.send_message(message.chat.id, 'Твои предметы:' + '\n' + '\n')
     answer = ''
+    print(subjects)
     for subject in subjects:
         answer += subject['name'] + '\n'
     bot.send_message(message.chat.id, answer)
@@ -133,8 +147,15 @@ def my_subjects(message):
 
 @bot.message_handler(commands=['week_grades', 'month_grades', 'day_grades'], content_types=['text'])
 def week_grades(message):
-    global login, password, user_token, random_answers, \
-        person_id, user_id, class_id, school_id
+    try:
+        data = get_data_from_db(tele_id=message.from_user.id, data_type=['school_id', 'user_token', 'person_id'])
+    except Exception as e:
+        bot.send_message(message.chat.id, 'Упс! Возможно ты не вошел в систему и мы с тобой еще не знакомы. '
+                                          'Воспользуйся функцией /login и попробуй снова!')
+
+    person_id = data['person_id']
+    school_id = data['school_id']
+    user_token = data['user_token']
 
     bad = False
     sat = False
@@ -172,8 +193,15 @@ def week_grades(message):
 
 @bot.message_handler(commands=['week_attend', 'month_attend', 'day_attend'], content_types=['text'])
 def attendance(message):
-    global login, password, user_token, random_answers, \
-        person_id, user_id, class_id, school_id
+    try:
+        data = get_data_from_db(tele_id=message.from_user.id, data_type=['person_id', 'user_token'])
+    except Exception as e:
+        bot.send_message(message.chat.id, 'Упс! Возможно ты не вошел в систему и мы с тобой еще не знакомы. '
+                                          'Воспользуйся функцией /login и попробуй снова!')
+
+    person_id = data['person_id']
+    user_token = data['user_token']
+
     if message.text == '/week_attend':
         start_date = str(datetime.date.today() - datetime.timedelta(days=7))
     if message.text == '/month_attend':
@@ -211,15 +239,19 @@ def attendance(message):
 
 @bot.message_handler(commands=['class_average_mark'], content_types=['text'])
 def class_average_mark(message):
-    global login, password, user_token, random_answers, \
-        person_id, user_id, class_id, school_id
+    try:
+        data = get_data_from_db(tele_id=message.from_user.id, data_type=['class_id', 'user_token'])
+    except Exception as e:
+        bot.send_message(message.chat.id, 'Упс! Возможно ты не вошел в систему и мы с тобой еще не знакомы. '
+                                          'Воспользуйся функцией /login и попробуй снова!')
+
+    class_id = data['class_id']
+    user_token = data['user_token']
 
     bot.send_message(message.chat.id, 'Будет показан средний балл класса с начала года то сегодняшнего дня')
     url = 'https://api.kundelik.kz/v2.0/edu-groups/' + class_id + '/avg-marks/2020-04-01/2020-05-01'
     average_mark = requests.get(url, headers={'Access-Token': user_token}).json()
     all_marks = []
-    print(average_mark)
-    print(user_token)
     for student in average_mark:
         for subject in student['per-subject-averages']:
             all_marks.append(float(subject['avg-mark-value'].replace(',', '.',)))
@@ -230,25 +262,31 @@ def class_average_mark(message):
 
 
 @bot.message_handler(commands=['login'], content_types=['text'])
-def answer(message):
+def login(message):
     if len(message.text.split()) == 3 and (message.text.split())[0] == '/login':
         login = (message.text.split())[1][6:]
         password = (message.text.split())[2][9:]
-        print(login)
-        print(password)
         try:
 
             dn = kundelik.KunAPI(login=login, password=password)
-
+            firebase.put('/' + str(message.from_user.id), 'login', login)
+            firebase.put('/' + str(message.from_user.id), 'password', password)
             user_token = dn.get_token(login=login, password=password)
+            firebase.put('/' + str(message.from_user.id), 'user_token', user_token)
             user_id = str(dn.get_info()['id'])
+            firebase.put('/' + str(message.from_user.id), 'user_id', user_id)
             person_id = str(dn.get_info()['personId'])
+            firebase.put('/' + str(message.from_user.id), 'person_id', person_id)
             data = get_user_information(user_token=user_token, user_id=user_id)
             school_id = str(data['schools'][0]['id'])
+            firebase.put('/' + str(message.from_user.id), 'school_id', school_id)
             class_id = data['eduGroups'][0]['id_str']
+            firebase.put('/' + str(message.from_user.id), 'class_id', class_id)
             bot.send_message(message.chat.id, text="Вход успешно произведен! Что ты хочешь сделать дальше?")
 
         except Exception as e:
+            firebase.put('/' + str(message.from_user.id), 'login', '')
+            firebase.put('/' + str(message.from_user.id), 'password', '')
             bot.send_message(message.chat.id, e)
 
     elif message.text == 'Спасибо!':
@@ -289,7 +327,7 @@ def show_attendance_in_period(person_id, start_date, end_date, user_token):
 
 def get_subject_name(class_id, user_token, subject_id=0):
     url = 'https://api.kundelik.kz/v2.0/edu-groups/' + class_id + '/subjects'
-    res = requests.get(url, headers={'Access-Token': user_token}).json()
+    res = requests.get(url, headers={'Access-Token': str(user_token)}).json()
     if subject_id == 0:
         return res
     for subject in res:
@@ -309,7 +347,17 @@ def get_subject_id(subject_name, user_token, class_id):
     return False
 
 
-bot.polling(none_stop=True, timeout=3.5)
+def get_data_from_db(tele_id, data_type=None):
+    if not data_type:
+        return firebase.get('/' + str(tele_id), '')
+    data = {}
+    for name in data_type:
+        data[name] = firebase.get('/' + str(tele_id), name)
+
+    return data
+
+
+bot.polling(none_stop=True, timeout=100)
 
 
 
